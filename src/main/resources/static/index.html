@@ -1,0 +1,525 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salesforce CRUD Manager</title>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f7fb;
+            color: #172b4d;
+        }
+
+        header {
+            background: #0b5cab;
+            color: white;
+            padding: 20px 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        header h1 { margin: 0; font-size: 23px; }
+
+        header a {
+            color: white;
+            border: 1px solid white;
+            border-radius: 6px;
+            padding: 10px 14px;
+            text-decoration: none;
+        }
+
+        main { max-width: 1200px; margin: 30px auto; padding: 0 18px; }
+
+        .toolbar, .panel {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px #172b4d12;
+            margin-bottom: 20px;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 14px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+
+        .field { display: flex; flex-direction: column; gap: 7px; }
+        label { font-size: 13px; font-weight: bold; }
+
+        input, select, textarea {
+            padding: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font: inherit;
+            min-width: 150px;
+            background: white;
+        }
+
+        button {
+            border: 0;
+            padding: 10px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            background: #0b5cab;
+            color: white;
+        }
+
+        button:hover { opacity: .9; }
+        button:disabled { opacity: .5; cursor: not-allowed; }
+        .secondary { background: #e8eef5; color: #172b4d; }
+        .danger { background: #c62828; }
+        .small { padding: 7px 9px; font-size: 12px; }
+
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 650px; }
+        th, td {
+            padding: 13px 12px;
+            text-align: left;
+            border-bottom: 1px solid #e8edf3;
+            font-size: 14px;
+        }
+        th { background: #f6f9fc; position: sticky; top: 0; }
+        td.actions { white-space: nowrap; }
+        td.actions button { margin: 2px; }
+
+        .status { color: #53657d; font-size: 14px; margin-top: 14px; }
+        .error { color: #b42318; }
+        .empty { text-align: center; padding: 30px; color: #64748b; }
+        .hidden { display: none !important; }
+
+        dialog {
+            border: 0;
+            border-radius: 12px;
+            width: min(600px, 94vw);
+            padding: 24px;
+            box-shadow: 0 15px 60px #0003;
+        }
+
+        dialog::backdrop { background: #10243d88; }
+        dialog h2 { margin-top: 0; }
+        #recordForm { display: grid; gap: 14px; }
+        #recordForm input, #recordForm select, #recordForm textarea {
+            width: 100%;
+            min-width: 0;
+        }
+        .form-actions { display: flex; gap: 10px; justify-content: end; }
+        .hint { color: #64748b; font-size: 13px; }
+
+        @media (max-width: 600px) {
+            header h1 { font-size: 19px; }
+            main { margin-top: 18px; padding: 0 10px; }
+            .toolbar, .panel { padding: 14px; }
+            .field, .field select, .field input { width: 100%; }
+        }
+    </style>
+</head>
+
+<body>
+<header>
+    <h1>☁ Salesforce CRUD Manager</h1>
+    <a href="/oauth2/authorization/salesforce" id="loginLink">Login with Salesforce</a>
+</header>
+
+<main>
+    <section class="toolbar">
+        <div class="field">
+            <label for="objectSelect">Select Salesforce Object</label>
+            <select id="objectSelect">
+                <option value="Account">Account</option>
+                <option value="Contact">Contact</option>
+                <option value="Lead">Lead</option>
+                <option value="Opportunity">Opportunity</option>
+                <option value="Case">Case</option>
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="searchInput">Search loaded records</label>
+            <input id="searchInput" placeholder="Search table...">
+        </div>
+
+        <button id="loadButton">Load Records</button>
+        <button id="createButton">+ Create Record</button>
+    </section>
+
+    <section class="panel">
+        <h2 id="tableTitle">Accounts</h2>
+        <p class="hint">Scroll down to load the next 20 records.</p>
+
+        <div class="table-wrap" id="tableWrap">
+            <table>
+                <thead><tr id="tableHead"></tr></thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+
+        <p id="status" class="status">Choose an object and load records.</p>
+        <button id="loadMoreButton" class="secondary hidden">Load 20 More</button>
+    </section>
+</main>
+
+<dialog id="recordDialog">
+    <h2 id="dialogTitle">Create Record</h2>
+    <form id="recordForm">
+        <div id="formFields"></div>
+        <p class="hint">Only fields shown here are sent to Salesforce. Required fields depend on the selected object.</p>
+        <div class="form-actions">
+            <button type="button" id="cancelButton" class="secondary">Cancel</button>
+            <button type="submit" id="saveButton">Save Record</button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+    const API = "/api/salesforce/records/";
+    const objectSelect = document.getElementById("objectSelect");
+    const tableHead = document.getElementById("tableHead");
+    const tableBody = document.getElementById("tableBody");
+    const statusBox = document.getElementById("status");
+    const loadMoreButton = document.getElementById("loadMoreButton");
+    const searchInput = document.getElementById("searchInput");
+    const dialog = document.getElementById("recordDialog");
+    const formFields = document.getElementById("formFields");
+
+    const fieldConfig = {
+        Account: [
+            ["Name", "Name", "text", true],
+            ["Type", "Type", "select", false, ["Prospect", "Customer - Direct", "Customer - Channel", "Partner", "Other"]],
+            ["Industry", "Industry", "select", false, ["Agriculture", "Banking", "Technology", "Healthcare", "Education", "Manufacturing", "Retail", "Other"]],
+            ["Phone", "Phone", "tel"],
+            ["Website", "Website", "url"]
+        ],
+        Contact: [
+            ["FirstName", "First Name", "text"],
+            ["LastName", "Last Name", "text", true],
+            ["Email", "Email", "email"],
+            ["Phone", "Phone", "tel"],
+            ["Title", "Job Title", "text"]
+        ],
+        Lead: [
+            ["FirstName", "First Name", "text"],
+            ["LastName", "Last Name", "text", true],
+            ["Company", "Company", "text", true],
+            ["Email", "Email", "email"],
+            ["Phone", "Phone", "tel"],
+            ["Title", "Job Title", "text"],
+            ["Status", "Status", "select", true, ["New", "Working", "Nurturing", "Qualified", "Unqualified"]]
+        ],
+        Opportunity: [
+            ["Name", "Opportunity Name", "text", true],
+            ["StageName", "Stage", "select", true, ["Prospecting", "Qualification", "Needs Analysis", "Value Proposition", "Id. Decision Makers", "Perception Analysis", "Proposal/Price Quote", "Negotiation/Review", "Closed Won", "Closed Lost"]],
+            ["CloseDate", "Close Date", "date", true],
+            ["Amount", "Amount", "number"],
+            ["Description", "Description", "textarea"]
+        ],
+        Case: [
+            ["Subject", "Subject", "text", true],
+            ["Status", "Status", "select", true, ["New", "Working", "Escalated", "Closed"]],
+            ["Origin", "Origin", "select", true, ["Phone", "Email", "Web"]],
+            ["Priority", "Priority", "select", true, ["High", "Medium", "Low"]],
+            ["Description", "Description", "textarea"]
+        ]
+    };
+
+    const displayFields = {
+        Account: ["Name", "Type", "Industry", "Phone", "Website"],
+        Contact: ["FirstName", "LastName", "Email", "Phone", "Title"],
+        Lead: ["FirstName", "LastName", "Company", "Email", "Status"],
+        Opportunity: ["Name", "StageName", "CloseDate", "Amount", "Probability"],
+        Case: ["CaseNumber", "Subject", "Status", "Priority", "Origin"]
+    };
+
+    let records = [];
+    let offset = 0;
+    let loading = false;
+    let hasMore = true;
+    let editingId = null;
+
+    function currentObject() {
+        return objectSelect.value;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"']/g, char => ({
+            "&": "&amp;", "<": "&lt;", ">": "&gt;",
+            '"': "&quot;", "'": "&#39;"
+        })[char]);
+    }
+
+    function setStatus(message, isError = false) {
+        statusBox.textContent = message;
+        statusBox.classList.toggle("error", isError);
+    }
+
+    async function apiFetch(url, options = {}) {
+        const response = await fetch(url, {
+            credentials: "same-origin",
+            ...options,
+            headers: {
+                ...(options.body ? { "Content-Type": "application/json" } : {}),
+                ...(options.headers || {})
+            }
+        });
+
+        const text = await response.text();
+
+        if (response.redirected || text.trimStart().startsWith("<!DOCTYPE") ||
+            text.trimStart().startsWith("<html")) {
+            throw new Error("Salesforce login may have expired. Refresh the page and sign in again.");
+        }
+
+        let data;
+        try { data = text ? JSON.parse(text) : {}; }
+        catch { data = { message: text }; }
+
+        if (!response.ok) {
+            throw new Error(data[0]?.message || data.message || `Request failed (${response.status})`);
+        }
+        return data;
+    }
+
+    function drawTable() {
+        const fields = displayFields[currentObject()];
+        tableHead.innerHTML = fields.map(field => `<th>${escapeHtml(field)}</th>`).join("") +
+            "<th>Actions</th>";
+
+        const term = searchInput.value.trim().toLowerCase();
+        const visibleRecords = records.filter(record =>
+            fields.some(field => String(record[field] ?? "").toLowerCase().includes(term))
+        );
+
+        tableBody.innerHTML = "";
+
+        
+if (!visibleRecords.length) {
+    if (loading) {
+        tableBody.innerHTML = "";
+    } else {
+        tableBody.innerHTML = `<tr><td colspan="${fields.length + 1}" class="empty">${
+            records.length ? "No matching records." : "No records found."
+        }</td></tr>`;
+    }
+}
+ else {
+            visibleRecords.forEach(record => {
+                const row = document.createElement("tr");
+
+                fields.forEach(field => {
+                    const cell = document.createElement("td");
+                    cell.textContent = record[field] ?? "—";
+                    row.appendChild(cell);
+                });
+
+                const actions = document.createElement("td");
+                actions.className = "actions";
+
+                const edit = document.createElement("button");
+                edit.className = "small";
+                edit.textContent = "Edit";
+                edit.addEventListener("click", () => openEditDialog(record));
+
+                const remove = document.createElement("button");
+                remove.className = "small danger";
+                remove.textContent = "Delete";
+                remove.addEventListener("click", () => deleteRecord(record));
+
+                actions.append(edit, remove);
+                row.appendChild(actions);
+                tableBody.appendChild(row);
+            });
+        }
+
+        document.getElementById("tableTitle").textContent =
+            currentObject() + " Records (" + records.length + " loaded)";
+
+        loadMoreButton.classList.toggle("hidden", !hasMore);
+    }
+
+    
+async function loadRecords(reset = false) {
+    if (loading) return;
+    if (reset) {
+        records = [];
+        offset = 0;
+        hasMore = true;
+    }
+    if (!hasMore) return;
+
+    loading = true;
+    document.getElementById("loadButton").disabled = true;
+    loadMoreButton.disabled = true;
+    setStatus("Loading records...");
+
+    if (reset) {
+        drawTable();
+    }
+
+    try {
+        const data = await apiFetch(
+            `${API}${currentObject()}?limit=20&offset=${offset}`
+        );
+        const batch = data.records || [];
+
+        records.push(...batch);
+        offset += batch.length;
+        hasMore = batch.length === 20;
+
+        drawTable();
+        setStatus(`${records.length} record(s) loaded.`);
+    } catch (error) {
+        setStatus(error.message, true);
+    } finally {
+        loading = false;
+        document.getElementById("loadButton").disabled = false;
+        loadMoreButton.disabled = false;
+    }
+}
+
+
+    function openCreateDialog() {
+        editingId = null;
+        document.getElementById("dialogTitle").textContent = "Create " + currentObject();
+        document.getElementById("saveButton").textContent = "Create Record";
+        buildForm({});
+        dialog.showModal();
+    }
+
+    function openEditDialog(record) {
+        editingId = record.Id;
+        document.getElementById("dialogTitle").textContent = "Edit " + currentObject();
+        document.getElementById("saveButton").textContent = "Save Changes";
+        buildForm(record);
+        dialog.showModal();
+    }
+
+    function buildForm(record) {
+        formFields.innerHTML = "";
+        const fields = fieldConfig[currentObject()];
+
+        fields.forEach(([name, label, type, required, options]) => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "field";
+
+            const fieldLabel = document.createElement("label");
+            fieldLabel.textContent = label + (required ? " *" : "");
+            fieldLabel.htmlFor = "field_" + name;
+
+            let input;
+            if (type === "select") {
+                input = document.createElement("select");
+                input.innerHTML = `<option value="">Select ${escapeHtml(label)}</option>` +
+                    options.map(option => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join("");
+            } else if (type === "textarea") {
+                input = document.createElement("textarea");
+                input.rows = 3;
+            } else {
+                input = document.createElement("input");
+                input.type = type;
+            }
+
+            input.id = "field_" + name;
+            input.name = name;
+            input.required = Boolean(required);
+            input.value = record[name] ?? "";
+
+            wrapper.append(fieldLabel, input);
+            formFields.appendChild(wrapper);
+        });
+    }
+
+    document.getElementById("recordForm").addEventListener("submit", async event => {
+        event.preventDefault();
+
+        const payload = {};
+        new FormData(event.currentTarget).forEach((value, key) => {
+            if (value !== "") payload[key] = value;
+        });
+
+        const saveButton = document.getElementById("saveButton");
+        saveButton.disabled = true;
+        setStatus("Saving record...");
+
+        try {
+            const objectName = currentObject();
+
+            if (editingId) {
+                await apiFetch(`${API}${objectName}/${encodeURIComponent(editingId)}`, {
+                    method: "PATCH",
+                    body: JSON.stringify(payload)
+                });
+            } else {
+                await apiFetch(`${API}${objectName}`, {
+                    method: "POST",
+                    body: JSON.stringify(payload)
+                });
+            }
+
+            dialog.close();
+            setStatus("Record saved successfully.");
+            await loadRecords(true);
+        } catch (error) {
+            setStatus(error.message, true);
+        } finally {
+            saveButton.disabled = false;
+        }
+    });
+
+    async function deleteRecord(record) {
+        const name = record.Name || record.Subject ||
+            [record.FirstName, record.LastName].filter(Boolean).join(" ") ||
+            record.CaseNumber || record.Id;
+
+        if (!confirm(`Delete "${name}"? This action cannot be undone.`)) return;
+
+        try {
+            await apiFetch(`${API}${currentObject()}/${encodeURIComponent(record.Id)}`, {
+                method: "DELETE"
+            });
+            records = records.filter(item => item.Id !== record.Id);
+            drawTable();
+            setStatus("Record deleted successfully.");
+        } catch (error) {
+            setStatus(error.message, true);
+        }
+    }
+
+    document.getElementById("loadButton").addEventListener("click", () => loadRecords(true));
+    document.getElementById("createButton").addEventListener("click", openCreateDialog);
+    document.getElementById("cancelButton").addEventListener("click", () => dialog.close());
+    loadMoreButton.addEventListener("click", () => loadRecords());
+    searchInput.addEventListener("input", drawTable);
+
+    objectSelect.addEventListener("change", () => {
+        searchInput.value = "";
+        loadRecords(true);
+    });
+
+    document.getElementById("tableWrap").addEventListener("scroll", event => {
+        const element = event.target;
+        if (element.scrollTop + element.clientHeight >= element.scrollHeight - 40) {
+            loadRecords();
+        }
+    });
+
+    window.addEventListener("scroll", () => {
+        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 120) {
+            loadRecords();
+        }
+    });
+
+    loadRecords(true);
+</script>
+</body>
+</html>
