@@ -1,9 +1,7 @@
-
 package com.manya.salesforce_crud;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -16,14 +14,15 @@ public class SecurityConfig {
 
         http
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/index.html", "/favicon.ico")
-                .permitAll()
+                .requestMatchers("/favicon.ico").permitAll()
                 .anyRequest().authenticated()
             )
             .csrf(csrf -> csrf
                 .ignoringRequestMatchers("/api/**")
             )
-            .oauth2Login(Customizer.withDefaults());
+            .oauth2Login(oauth -> oauth
+                .defaultSuccessUrl("/", true)
+            );
 
         return http.build();
     }
