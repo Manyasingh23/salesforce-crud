@@ -79,12 +79,12 @@ public class SecurityConfig {
                 )
                 .defaultSuccessUrl("/", true)
             )
-                        .logout(logout -> logout
-                .logoutSuccessUrl("/")
-                .invalidateHttpSession(true)
-                .clearAuthentication(true)
-                .deleteCookies("JSESSIONID")
-            );
+.logout(logout -> logout
+    .logoutSuccessUrl("/?logout")
+    .invalidateHttpSession(true)
+    .clearAuthentication(true)
+    .deleteCookies("JSESSIONID")
+);
 
         return http.build();
     }
