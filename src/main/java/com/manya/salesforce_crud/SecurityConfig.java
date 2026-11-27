@@ -71,7 +71,7 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .csrf(csrf -> csrf
-                .ignoringRequestMatchers("/api/**")
+                .ignoringRequestMatchers("/api/**", "/logout")
             )
             .oauth2Login(oauth -> oauth
                 .authorizationEndpoint(endpoint ->

@@ -129,9 +129,10 @@
 <body>
 <header>
     <h1>☁ Salesforce CRUD Manager</h1>
-    <a href="/oauth2/authorization/salesforce" id="loginLink">Login with Salesforce</a>
-    <form action="/logout" method="post" style="display:inline;">
+   <form action="/logout" method="post" style="display:inline;">
+    <input type="hidden" name="_csrf" id="csrfToken">
     <button type="submit" id="logoutButton">Logout</button>
+</form>
 </form>
 </header>
 
