@@ -78,6 +78,12 @@ public class SecurityConfig {
                     endpoint.authorizationRequestResolver(resolver)
                 )
                 .defaultSuccessUrl("/", true)
+            )
+                        .logout(logout -> logout
+                .logoutSuccessUrl("/")
+                .invalidateHttpSession(true)
+                .clearAuthentication(true)
+                .deleteCookies("JSESSIONID")
             );
 
         return http.build();
