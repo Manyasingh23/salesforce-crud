@@ -53,7 +53,7 @@ public class SecurityConfig {
                 String uri = request.getAuthorizationRequestUri();
 
                 uri = uri.replace(
-                    "redirect_uri=https://salesforce-crud-61no.onrender.com/login/oauth2/code/salesforce",
+         "redirect_uri=https://salesforce-crud-61no.onrender.com/login/oauth2/code/salesforce",
                     "redirect_uri=https%3A%2F%2Fsalesforce-crud-61no.onrender.com%2Flogin%2Foauth2%2Fcode%2Fsalesforce"
                 );
 
